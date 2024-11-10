@@ -2,18 +2,23 @@ package hw1.server;
 
 
 import hw1.client.ClientWindow;
-import hw1.client.User;
+import hw1.common.Checkable;
+import hw1.common.Drawable;
+import hw1.common.Processable;
+import hw1.common.User;
 
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.WindowEvent;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-public class ServerWindow extends JFrame {
+public class ServerWindow extends JFrame implements Drawable, Processable {
+    private Server serverController;
     private static final int WINDOW_HEIGHT_STOP = 150;
     private static final int WINDOW_WIDTH_STOP = 300;
     private static final int WINDOW_HEIGHT_START = 450;
@@ -21,33 +26,14 @@ public class ServerWindow extends JFrame {
     private static final String NAME_WINDOW = "Chat server";
     private static final String BTN_START = "Start";
     private static final String BTN_STOP = "Stop";
-
-    private static Set<User> users = new HashSet<>();
-    static {
-        users.add(new User("user1", "11111111"));
-        users.add(new User("user2", "22222222"));
-    }
-    public static final String serverIP = "1.1.1.1";
-    public static final String serverPort = "1234";
-    StringBuilder messages = new StringBuilder();
-
-    private JButton btnStart;
-    private JButton btnStop;
-    private JPanel panBotton, panChat;
+    private JButton btnStart, btnStop;
+    private JPanel panBotton;
     private JTextArea chatArea;
-    private boolean flagWorkingServer, changedWidow;
-
-    //текст чата
-    private StringBuilder chat = new StringBuilder();
+    private boolean changedWidow;
 
     public ServerWindow() {
-        flagWorkingServer = false;
         changedWidow = false;
-        setDefaultCloseOperation(EXIT_ON_CLOSE);
-        setLocation(10, 10);
-        setSize(WINDOW_WIDTH_STOP, WINDOW_HEIGHT_STOP);
-        setTitle(NAME_WINDOW);
-        setResizable(false);
+        settings();
 
         panBotton = new JPanel(new GridLayout(1, 2));
         panBotton.add(createButtonStart());
@@ -56,15 +42,23 @@ public class ServerWindow extends JFrame {
 
         setVisible(true);
     }
+    public void setServerController(Server serverController) {
+        this.serverController = serverController;
+    }
+    private void settings() {
+        setDefaultCloseOperation(HIDE_ON_CLOSE);
+        setLocation(10, 10);
+        setSize(WINDOW_WIDTH_STOP, WINDOW_HEIGHT_STOP);
+        setTitle(NAME_WINDOW);
+        setResizable(false);
+    }
     private Component createButtonStart() {
         btnStart = new JButton(BTN_START);
         btnStart.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent actionEvent) {
-                if (!flagWorkingServer) {
-                    flagWorkingServer = true;
-                    startNewServer();
-                    repaint();
+                if (!serverController.checkActiveServer()) {
+                    connect();
                 }
             }
         });
@@ -75,16 +69,14 @@ public class ServerWindow extends JFrame {
         btnStop.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent actionEvent) {
-                if (flagWorkingServer) {
-                    stopServer();
-                    flagWorkingServer = false;
+                if (serverController.checkActiveServer()) {
+                    disconnect();
                 }
             }
         });
         return btnStop;
     }
-    private List<ClientWindow> clientWindowsList = new ArrayList<>();
-    void startNewServer() {
+    private void startNewServer() {
         if (!changedWidow){
             this.revalidate();
             this.repaint();
@@ -98,62 +90,48 @@ public class ServerWindow extends JFrame {
         }
         btnStop.setEnabled(true);
         btnStart.setEnabled(false);
-        addChatMsg("Сервер запущен.");
-        //изменить размер, добавить панель с сообщениями
+        serverController.addChatMsg("Сервер запущен.");
     }
     private Component createPanelChat() {
         this.revalidate();
         this.repaint();
-        panChat = new JPanel();
 
-        Font font = new Font("Verdana", Font.PLAIN, 28);
-
-        chatArea = new JTextArea(chat.toString());
+        chatArea = new JTextArea(serverController.getChat());
         chatArea.setBackground(Color.WHITE);
         chatArea.setEditable(false);
-
-        panChat.add(chatArea);
-
-        this.add(panChat, BorderLayout.CENTER);
+        chatArea.setFont(new Font("Verdana", Font.PLAIN, 12));
         this.repaint();
         this.revalidate();
-        return new JScrollPane(panChat);
+        return new JScrollPane(chatArea);
     }
-    void stopServer() {
+    @Override
+    public void connect() {
+        serverController.startServer();
+        startNewServer();
+
+        render();
+    }
+    @Override
+    public void disconnect() {
         btnStop.setEnabled(false);
         btnStart.setEnabled(true);
-        addChatMsg("Сервер остановлен.");
-
-        //сохранить все сообщения в файл
-        //изменить размер окна (в первоначальное)
+        serverController.addChatMsg("Сервер остановлен.");
+        serverController.stopServer();
     }
-    public boolean checkUser(User user) {
-        for (var u : users) {
-            if (user.equals(u))
-                return true;
-        }
-        return false;
+    @Override
+    public void update(String msg) {
+        chatArea.append(msg);
+        render();
     }
-    public void addChatMsg(String txt) {
-        if (flagWorkingServer)
-            chat.append(txt + System.lineSeparator());
-        chatArea.setText(chat.toString());
+    public void render() {
         chatArea.revalidate();
         chatArea.repaint();
-        clientWindowsList.stream().forEach(x -> x.refreshChat());
     }
-    public boolean checkActiveServer() {
-        return flagWorkingServer;
-    }
-    public String getChat() {
-        return chat.toString();
-    }
-    public void addNewClient(ClientWindow client) {
-        clientWindowsList.add(client);
-        System.out.println(clientWindowsList);
-    }
-    public void dellClientForRefresh (ClientWindow client) {
-        clientWindowsList.remove(client);
-        System.out.println(clientWindowsList);
+    @Override
+    protected void processWindowEvent(WindowEvent e) {
+        super.processWindowEvent(e);
+        if (e.getID() == WindowEvent.WINDOW_CLOSING){
+            serverController.setUsingGUI();
+        }
     }
 }

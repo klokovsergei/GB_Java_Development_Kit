@@ -1,14 +1,15 @@
 package hw1.client;
 
-import hw1.server.ServerWindow;
+import hw1.common.Drawable;
+import hw1.common.User;
+import hw1.server.Server;
 
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
 
-public class ClientWindow extends JFrame {
-    private ServerWindow server;
-    private User user;
+public class ClientWindow extends JFrame implements Drawable {
+    private Client client;
     private static final int WINDOW_HEIGHT = 550;
     private static final int WINDOW_WIDTH = 500;
     private static final String NAME_WINDOW = "Chat client";
@@ -18,15 +19,12 @@ public class ClientWindow extends JFrame {
     private JButton btnExit, btnLogin, btnSend;
     private JTextField serverIP, serverPort, login, textForSend;
     private JPasswordField password;
-    private JPanel panIdentification, panSendText, panExit, panChat;
+    private JPanel panIdentification, panSendText, panExit;
     private JLabel userName;
     private JTextArea chatArea;
-    private boolean flagWorkingClient;
     private String[] textFields = new String[4];
 
-    public ClientWindow(ServerWindow server) {
-        this.server = server;
-        flagWorkingClient = false;
+    public ClientWindow() {
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
         setSize(WINDOW_WIDTH, WINDOW_HEIGHT);
@@ -34,7 +32,11 @@ public class ClientWindow extends JFrame {
         setResizable(false);
 
         add(createPanelIdentification(), BorderLayout.NORTH);
+        add(createChatArea());
         setVisible(true);
+    }
+    public void setClient(Client client) {
+        this.client = client;
     }
     private Component createPanelIdentification() {
         panIdentification = new JPanel(new GridLayout(2, 3));
@@ -73,31 +75,28 @@ public class ClientWindow extends JFrame {
         btnSend.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent actionEvent) {
-                if (server.checkActiveServer()) {
-                    server.addChatMsg(textFields[2] + ": " + textForSend.getText());
-                    textForSend.setText("");
+                if (client.getFlagWorking()) {
+                    if (client.sendMsgToServer(textForSend.getText()))
+                        textForSend.setText("");
+                    else {
+                        chatArea.append("Сервер не отвечает.\n");
+                    }
                 } else {
-
+                    chatArea.append("Приложение клиента деактивировано.\n");
                 }
             }
         });
 
         return btnSend;
     }
-    private void createPanelChat() {
-        this.revalidate();
-        this.repaint();
-        panChat = new JPanel();
+    private Component createChatArea() {
 
         Font font = new Font("Verdana", Font.PLAIN, 28);
-        chatArea = new JTextArea(server.getChat());
+        chatArea = new JTextArea();
         chatArea.setBackground(Color.WHITE);
         chatArea.setEditable(false);
-
-        panChat.add(chatArea);
-        this.add(panChat, BorderLayout.CENTER);
-        this.repaint();
-        this.revalidate();
+        this.add(chatArea, BorderLayout.CENTER);
+        return chatArea;
     }
     private void createPanelExit() {
         this.revalidate();
@@ -146,6 +145,8 @@ public class ClientWindow extends JFrame {
         login.addKeyListener(new KeyAdapter() {
             @Override
             public void keyReleased(KeyEvent e) {
+                if (login.getText().length() >= 1)
+                    login.setBackground(Color.WHITE);
                 textFields[2] = login.getText();
             }
         });
@@ -174,13 +175,17 @@ public class ClientWindow extends JFrame {
         btnLogin.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent actionEvent) {
-                if (identificateUserOnServer()) {
-                    flagWorkingClient = true;
-                    createPanelSend();
-                    createPanelChat();
-                    createPanelExit();
-                    repaint();
-                    addClientToServer();
+                if (checkTextFields()) {
+                     client.setUser(textFields);
+                     client.connect();
+                     if (client.getFlagWorking()) {
+                         chatArea.setText("Произведено подключение к серверу чата.\n");
+                         createPanelSend();
+                         createPanelExit();
+                         repaint();
+                     } else {
+                         chatArea.append("Сервер не отвечает.\n");
+                     }
                 }
             }
         });
@@ -192,30 +197,39 @@ public class ClientWindow extends JFrame {
             @Override
             public void actionPerformed(ActionEvent actionEvent) {
                 setVisible(false);
-                flagWorkingClient = false;
-                dellClientToServer();
+                client.disconnect();
             }
         });
         return btnExit;
     }
-    private boolean identificateUserOnServer() {
-        if (textFields[0] == null || textFields[1] == null || textFields[2] == null || textFields[3] == null)
-            return false;
-        if (!(textFields[0].equals(server.serverIP) && textFields[1].equals(server.serverPort)))
-            return false;
-        if (server.checkUser(new User(textFields[2], textFields[3])))
-            return true;
-        return false;
+
+    public String getName() {
+        return textFields[2];
     }
-    private void addClientToServer() {
-        server.addNewClient(this);
-    }
-    private void dellClientToServer() {
-        server.dellClientForRefresh(this);
-    }
-    public void refreshChat() {
-        chatArea.setText(server.getChat());
-        chatArea.revalidate();
+
+    @Override
+    public void render() {
         chatArea.repaint();
+    }
+
+    @Override
+    public void update(String msg) {
+        chatArea.append(msg);
+    }
+    private boolean checkTextFields() {
+        boolean flag = true;
+        if (textFields[0] == null) {
+            serverIP.setBackground(Color.RED);
+            flag = false;
+        }
+        if (textFields[1] == null) {
+            serverPort.setBackground(Color.RED);
+            flag = false;
+        }
+        if (textFields[2] == null) {
+            login.setBackground(Color.RED);
+            flag = false;
+        }
+        return flag;
     }
 }
